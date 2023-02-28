@@ -1,0 +1,357 @@
+
+<style>
+	.result {
+		display: flex;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.result-title {
+		white-space: nowrap;
+	}
+
+	.result-summary {
+		/*display: inline-block;
+		max-width: 100px;
+		height: 1em;
+		overflow: hidden;*/
+		white-space: nowrap;
+	}
+
+
+	.Q11424, /* movie */
+	.Q7889, /* video game */
+	.Q482994, /* musical album */
+	.Q581714, /* animated TV series */
+	.Q3464665, /* television series */
+	.Q21156425, /* wrestling event */
+	.Q17317604, /* professional wrestling event */
+	.Q27889498, /* boxing match */
+	.Q132241, /* recurring event */
+	.Q20900468, /* slavic folk holiday */
+	.Q190084, /* hoax */
+	.Q484188, /* serial killer */
+	.Q55983715, /* animal common name */
+	.Q39367, /* dog breed */
+	.Q16521, /* taxon (of animals) */
+	.Q35657, /* US State */
+	.Q15056995, /* aircraft model */
+	.Q15056993, /* aircraft family */
+	.Q8502, /* mountain */
+	.Q1637706, /* city with population >1m */
+	.Q5119, /* capital city */
+	.Q26401003, /* a specific animal */
+	.end-class-to-allow-no-commas
+	{
+		display: none;
+	}
+
+	.Q1445650, /* holiday */
+	.Q1197685, /* public holiday */
+	.end-class-to-allow-no-commas {
+		opacity: none;
+	}
+
+	/* person */
+	.Q5 {
+		opacity: 0.3;
+	}
+</style>
+
+<script src='https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.13.6/underscore-min.js'></script>
+<div class=results></div>
+
+<script>
+
+(async () => {
+
+const QUERY_PAST_N_DAYS = 1
+const FILTER_OUT_PAGES = [
+	'Main_Page', 'Special:Search', 'Wikipedia', 'Wikipedia:About', 'Wikipedia:Featured_pictures', 'Portal:Current_events', 'Help:IPA/English', 'Special:RecentChanges', 'Special:Watchlist', 'Wikimedia_Foundation',
+	// People requesting websites
+	'YouTube', 'Facebook', 'Google', 'Instagram', 'Apple_Inc.', 'Netflix', 'Internet', 'Omegle', 'XNXX', 'YouTube_Music', 'YouTube_Premium', 'YouTube_Kids', 'Google_AdSense', 'Google_Translate', '.xxx', 'WhatsApp', 'Video_hosting_service', 'Google_Maps', 'Susan_Wojcicki', 'Meta_Platforms', 'Wiki', 'Pornhub', 'Email', 'Email_client', 'Windows_Server', 'Microsoft_Windows', 'IOS', 'Android_(operating_system)', 'Windows_10_version_history', 'Apple_Network_Server', 'Microsoft_365', 'Microsoft_Exchange_Server', 'Gmail', '123Movies', 'Nokia', 'The_Pirate_Bay', 'Twitter', 'List_of_Microsoft_365_applications_and_services', 'Category:Office_365', 'LinkedIn', 'HTTP_cookie', 'MacOS', 'OnlyFans', 'Flipkart', 'Client_access_license', 'TikTok', 'Pinterest',
+	// errors
+	'Null',
+	// Google assistant gives the example "Show Cleopatra on Wikipedia"
+	'Cleopatra',
+	// yawn
+	'List_of_unusual_deaths',
+	'List_of_most-followed_Instagram_accounts',
+	'List_of_countries_and_dependencies_by_population',
+	'List_of_countries_by_GDP_(nominal)',
+	'List_of_states_and_territories_of_the_United_States',
+	'List_of_presidents_of_the_United_States',
+	'List_of_ethnic_slurs',
+	'Chief_executive_officer',
+	'Sex',
+	'World_War_I',
+	'World_War_II',
+	// almost countries
+	'European_Union',
+	'Hong_Kong',
+	'Northern_Ireland',
+	'G20',
+	'Millennials',
+	'Generation_X',
+	'Generation_Z',
+	// 'File:Flag_of_Singapore.svg',
+	'JavaScript',
+	'C_(programming_language)',
+	'Earth',
+	'Jesus',
+	'English_language',
+	'President_of_the_United_States',
+	...'QWERTYUIOPASDFGHJKLZXCVBNM'.split(''),
+]
+const FILTER_OUT_TITLE_REGEXES = [
+	/^Wikipedia:/,
+	/^Deaths_in_20\d\d$/,
+	/\(video_game|film|producer|TV_series|musical|guitarist|(football|basketball|golf|baseball|wrestl)(er)?|tennis|badminton|cricket|hockey|wrestling|snooker\)/,
+	/XXX/,
+	/^Internet_Explorer/,
+	/^Windows_Server/,
+	/^Index(\b|_)/,
+	/^Microsoft_/,
+	/^List_of_Microsoft_/,
+	/^List_of_highest-grossing/,
+	// the current date
+	/^(January|February|March|April|May|June|July|August|September|October|November|December)_\d\d?$/,
+	/^20\d\d$/,
+	/^Deaths in \w+ \d\d\d\d$/,
+	/\bSuperbowl\b/,
+]
+const FILTER_OUT_SUMMARY_REGEXES = [
+	// common hits
+	/^(.|\n){0,300}\b(is|was) (a(n)?|the) (\w+ ){0,2}(country|nation|sovereign state|continent)\b/,
+
+	// popular culture
+	/\bactor\b/,
+	/\bactress\b/,
+	/\bmusician\b/,
+	/\bsongwriter\b/,
+	/\bmedia personality\b/,
+	/\b(television|TV) ((-|\w)+ )?(series|miniseries|show|personality)\b/,
+	/\bfilmmaker\b/,
+	/\bassociation football\b/,
+	/\bmusical group\b/,
+	/\bviral phenomenon\b/,
+	/\bInternet celebrity\b/,
+	/\bblogger\b/,
+	/\bfilm director\b/,
+	/\bprofessional performer(s)?\b/,
+	/\bmobile game\b/,
+	/\bhip hop\b/,
+	/\brugby union\b/,
+	/\bbroadcaster (\w+ ){0,10}(show|series)\b/,
+	/\bsong (\w+ ){0,10}singer\b/,
+	/\bpop ((-|\w)+ )?(group|band|music)\b/,
+	/reality (\w+ )?series/,
+	/professional \w+ (football|basketball|golf|baseball|tennis|badminton|cricket|hockey|snooker|(box|curl|wrestl)(ing|er))/i,
+	/\bfootballer|golfer|baseballer|cricketer|boxer|curler|wrestler\b/,
+	/(football|basketball|golf|baseball|golf|tennis|badminton|cricket|hockey|snooker|darts|ski|(box|curl|wrestl)(ing|er)) (league|club|tournament|team|player|coach|manager|athlete|competition|championship|cup|world cup|association|awards)/i,
+	/international cricket/i,
+	/(horror|thriller|action|superhero|drama|comedy|fiction|war|adventure|heist|crime|mystery|fantasy|slasher) film/,
+	/\bactress\b/,
+	/\brapper\b/,
+	/\bboy band\b/,
+	/\bgirl group\b/,
+	/social media influencer/,
+	/cartoonist/,
+	/action-adventure game/,
+	/kickbox(er|ing)/,
+	/mixed martial art(s|ist)/,
+	/comic book/,
+	/video game/,
+	/racing driver/,
+	/serial killer/,
+	/Formula One/,
+	/film producer/,
+	/DreamWorks|Pixar/,
+	/Academy Awards/,
+	/sitcom/,
+	/metal band/,
+	/retired singer/,
+	/film (\w+ ){0,3}television/,
+	/rock band/,
+	/(season|series) (\w+ ){0,10}premier/,
+	/English football/,
+	/record executive/,
+	/\bsocialite\b/,
+	/\bYouTuber\b/,
+	/\bfootball quarterback\b/,
+	/\bmotion picture(s)?\b/,
+	/\bGrammy Award(s)?\b/,
+	/\bWorld Cup\b/i,
+	/\bEurovision Song Contest\b/,
+	/\breality television\b/,
+	/\bNASCAR Cup\b/,
+	/\bski-jumper\b/,
+	/\bmotorcycle racer\b/,
+	/\bathletics\b/,
+	/\b(sci-fi|science fiction|horror|thriller|romance) (novel|series)\b/,
+]
+const REQ_THROTTLE_MS = 10
+
+/*
+
+Library
+
+*/
+
+const assert = (bool) => {
+	if (!bool) {
+		throw new Error("assertion failed")
+	}
+}
+
+const html = (string, parentType = 'div') => {
+	const parent = document.createElement(parentType)
+	parent.innerHTML = string
+	return parent.children[0]
+}
+
+const escapeHtml = (string) => {
+	const div = document.createElement('div')
+	div.textContent = string
+	return div.innerHTML
+}
+
+/*
+
+Render
+
+*/
+
+const resultsElem = document.querySelector('.results')
+const renderPage = (page) => {
+	const resultElem = html(`
+		<div class='result ${page.page.wikidata?.claims?.P31?.map((claim) => claim.mainsnak.datavalue.value.id)?.join(' ')}'>
+			<span class=result-count>${page.page.views.toLocaleString()}</span>
+			<a class=result-title href=${JSON.stringify('https://en.wikipedia.org/wiki/' +encodeURIComponent(page.page.article))}>
+				${escapeHtml(page.summary.title)}
+			</a>
+			<span class=result-summary>
+				${escapeHtml(page.summary.extract)}
+			</span>
+		</div>
+	`)
+	resultsElem.appendChild(resultElem)
+	return resultElem
+}
+
+const lastYear = String(new Date().getFullYear() - 1)
+
+/*
+
+Get articles to display
+
+*/
+
+let pages = {}
+
+for (let i = 1; i <= QUERY_PAST_N_DAYS; i++) {
+	const pastDay = new Date(new Date() - i * 86_400_000).toISOString().slice(0, 10).replace(/-/g, '/')
+	let res = await (await fetch(`https://wikimedia.org/api/rest_v1/metrics/pageviews/top/en.wikipedia/all-access/${pastDay}`)).json()
+
+	assert(res.items.length == 1)
+	const articles = res.items[0].articles
+
+	for (const { article, views } of articles) {
+		pages[article] = {
+			article,
+			views: Math.max(pages[article]?.views ?? 0, views),
+		}
+	}
+}
+
+pages = Object.values(pages)
+pages.sort((a, b) => b.views - a.views)
+
+/*
+
+Benchmark to last year to ignore common pages (Jesus, George Washington)
+
+*/
+
+const pageViewsSameMonthLastYear = {}
+let res = await (await fetch(`https://wikimedia.org/api/rest_v1/metrics/pageviews/top/en.wikipedia/all-access/${lastYear}/${new Date().toISOString().slice(5, 7)}/all-days`)).json()
+for (const { article, views } of res.items[0].articles) {
+	pageViewsSameMonthLastYear[article] = (pageViewsSameMonthLastYear[article] ?? 0) + views
+}
+
+
+const totalPageViewsLastYear = {}
+
+for (let month = 1; month <= 12; month++) {
+	let res = await (await fetch(`https://wikimedia.org/api/rest_v1/metrics/pageviews/top/en.wikipedia/all-access/${lastYear}/${(month < 10 ? '0' : '') + month}/all-days`)).json()
+	for (const { article, views } of res.items[0].articles) {
+		totalPageViewsLastYear[article] = (totalPageViewsLastYear[article] ?? 0) + views
+	}
+}
+
+// let pages = await (await fetch('https://pageviews.wmcloud.org/topviews/yearly_datasets/en.wikipedia/2022.json?origin=*')).json()
+
+pages = pages.filter(({ article }) =>
+	FILTER_OUT_PAGES.indexOf(article) === -1 &&
+	FILTER_OUT_TITLE_REGEXES.every((pattern) => !pattern.test(article)))
+
+const normalized = {}
+
+window.results = []
+
+for (const chunk of _.chunk(pages, 20)) {
+	let res = await (await fetch('https://en.wikipedia.org/w/api.php?format=json&origin=*&exlimit=max&action=query&prop=extracts&exintro&explaintext&redirects=1&titles=' + chunk.map(({ article }) => encodeURIComponent(article)).join('|'))).json()
+
+	// Match summary with page
+	if (res.query.normalized !== undefined) {
+		for (const { from, to } of Object.values(res.query.normalized)) {
+			normalized[from] = to
+		}
+	}
+	const normalize = (string) => normalized[string] || string
+	for (const summary of Object.values(res.query.pages)) {
+		const page = pages.find((page) => normalize(page.article) === summary.title)
+		if (page) {
+			page.summary = summary
+		}
+	}
+
+	// Get wikidata?
+	res = await (await fetch('https://www.wikidata.org/w/api.php?origin=*&format=json&action=wbgetentities&sites=enwiki&titles=' + chunk.map(({ article }) => encodeURIComponent(article)).join('|'))).json()
+	for (const entity of Object.values(res.entities)) {
+		const page = pages.find((page) => page.summary?.title === entity.sitelinks?.enwiki?.title)
+		if (page) {
+			page.wikidata = entity
+		}
+	}
+
+	for (const page of chunk) {
+		if (page.summary === undefined) {
+			continue
+		}
+
+		if (FILTER_OUT_SUMMARY_REGEXES.every((pattern) => !pattern.test(page.summary.extract?.trim())) &&
+			// require pageviews to be 2x expected based on the same month last year
+			(pageViewsSameMonthLastYear[page.article] ?? 0) / 30 * 2 <
+			  page.views
+		) {
+			page.elem = renderPage({ page, summary: page.summary })
+			results.push(page)
+		}
+	}
+}
+
+// TODO: filter by wikidata?
+
+// https://www.wikidata.org/w/api.php?action=wbgetentities&sites=enwiki&titles=Theodore_Roosevelt
+
+// Is it a human?
+// Object.values(res.entities)[0].claims.P31[0].mainsnak.datavalue.value.id === "Q5"
+
+// Then probably filter out geographic locations, animals, and foods
+// Also try filtering out people and see what interesting stuff shows up
+// >50% of articles are people
+
+})()
+
+</script>
