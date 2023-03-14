@@ -24,6 +24,7 @@
 	.Q482994, /* musical album */
 	.Q581714, /* animated TV series */
 	.Q3464665, /* television series */
+	.Q13406554, /* sports competition */
 	.Q21156425, /* wrestling event */
 	.Q17317604, /* professional wrestling event */
 	.Q27889498, /* boxing match */
@@ -59,7 +60,7 @@
 </style>
 
 <script src='https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.13.6/underscore-min.js'></script>
-<div class=results></div>
+<div class=results>If it doesn't work, hard refresh<br></div>
 
 <script>
 
@@ -69,7 +70,7 @@ const QUERY_PAST_N_DAYS = 1
 const FILTER_OUT_PAGES = [
 	'Main_Page', 'Special:Search', 'Wikipedia', 'Wikipedia:About', 'Wikipedia:Featured_pictures', 'Portal:Current_events', 'Help:IPA/English', 'Special:RecentChanges', 'Special:Watchlist', 'Wikimedia_Foundation',
 	// People requesting websites
-	'YouTube', 'Facebook', 'Google', 'Instagram', 'Apple_Inc.', 'Netflix', 'Internet', 'Omegle', 'XNXX', 'YouTube_Music', 'YouTube_Premium', 'YouTube_Kids', 'Google_AdSense', 'Google_Translate', '.xxx', 'WhatsApp', 'Video_hosting_service', 'Google_Maps', 'Susan_Wojcicki', 'Meta_Platforms', 'Wiki', 'Pornhub', 'Email', 'Email_client', 'Windows_Server', 'Microsoft_Windows', 'IOS', 'Android_(operating_system)', 'Windows_10_version_history', 'Apple_Network_Server', 'Microsoft_365', 'Microsoft_Exchange_Server', 'Gmail', '123Movies', 'Nokia', 'The_Pirate_Bay', 'Twitter', 'List_of_Microsoft_365_applications_and_services', 'Category:Office_365', 'LinkedIn', 'HTTP_cookie', 'MacOS', 'OnlyFans', 'Flipkart', 'Client_access_license', 'TikTok', 'Pinterest',
+	'YouTube', 'Facebook', 'Google', 'Instagram', 'Apple_Inc.', 'Netflix', 'Internet', 'Omegle', 'XNXX', 'YouTube_Music', 'YouTube_Premium', 'YouTube_Kids', 'Google_AdSense', 'Google_Translate', '.xxx', 'WhatsApp', 'Video_hosting_service', 'Google_Maps', 'Susan_Wojcicki', 'Meta_Platforms', 'Wiki', 'Pornhub', 'Email', 'Email_client', 'Windows_Server', 'Microsoft_Windows', 'IOS', 'Android_(operating_system)', 'Windows_10_version_history', 'Apple_Network_Server', 'Microsoft_365', 'Microsoft_Exchange_Server', 'Gmail', '123Movies', 'Nokia', 'The_Pirate_Bay', 'Twitter', 'List_of_Microsoft_365_applications_and_services', 'Category:Office_365', 'LinkedIn', 'HTTP_cookie', 'MacOS', 'OnlyFans', 'Flipkart', 'Client_access_license', 'TikTok', 'Pinterest', 'XVideos', 'Google_Scholar',
 	// errors
 	'Null',
 	// Google assistant gives the example "Show Cleopatra on Wikipedia"
@@ -80,7 +81,10 @@ const FILTER_OUT_PAGES = [
 	'List_of_countries_and_dependencies_by_population',
 	'List_of_countries_by_GDP_(nominal)',
 	'List_of_states_and_territories_of_the_United_States',
+	'List_of_countries_by_Human_Development_Index',
 	'List_of_presidents_of_the_United_States',
+	'List_of_United_States_cities_by_population',
+	'List_of_largest_cities',
 	'List_of_ethnic_slurs',
 	'Chief_executive_officer',
 	'Sex',
@@ -146,7 +150,7 @@ const FILTER_OUT_SUMMARY_REGEXES = [
 	/\bsong (\w+ ){0,10}singer\b/,
 	/\bpop ((-|\w)+ )?(group|band|music)\b/,
 	/reality (\w+ )?series/,
-	/professional \w+ (football|basketball|golf|baseball|tennis|badminton|cricket|hockey|snooker|(box|curl|wrestl)(ing|er))/i,
+	/\b(professional|college) (\w+ )?(football|basketball|golf|baseball|tennis|badminton|cricket|hockey|snooker|(box|curl|wrestl)(ing|er))/i,
 	/\bfootballer|golfer|baseballer|cricketer|boxer|curler|wrestler\b/,
 	/(football|basketball|golf|baseball|golf|tennis|badminton|cricket|hockey|snooker|darts|ski|(box|curl|wrestl)(ing|er)) (league|club|tournament|team|player|coach|manager|athlete|competition|championship|cup|world cup|association|awards)/i,
 	/international cricket/i,
@@ -178,7 +182,7 @@ const FILTER_OUT_SUMMARY_REGEXES = [
 	/record executive/,
 	/\bsocialite\b/,
 	/\bYouTuber\b/,
-	/\bfootball quarterback\b/,
+	/\bfootball (quarterback|running back)\b/,
 	/\bmotion picture(s)?\b/,
 	/\bGrammy Award(s)?\b/,
 	/\bWorld Cup\b/i,
@@ -300,6 +304,7 @@ const normalized = {}
 window.results = []
 
 for (const chunk of _.chunk(pages, 20)) {
+	// Get page summaries
 	let res = await (await fetch('https://en.wikipedia.org/w/api.php?format=json&origin=*&exlimit=max&action=query&prop=extracts&exintro&explaintext&redirects=1&titles=' + chunk.map(({ article }) => encodeURIComponent(article)).join('|'))).json()
 
 	// Match summary with page
@@ -315,11 +320,10 @@ for (const chunk of _.chunk(pages, 20)) {
 			page.summary = summary
 		}
 	}
-
-	// Get wikidata?
+	// Get wikidata
 	res = await (await fetch('https://www.wikidata.org/w/api.php?origin=*&format=json&action=wbgetentities&sites=enwiki&titles=' + chunk.map(({ article }) => encodeURIComponent(article)).join('|'))).json()
 	for (const entity of Object.values(res.entities)) {
-		const page = pages.find((page) => page.summary?.title === entity.sitelinks?.enwiki?.title)
+		const page = pages.find((page) => normalize(page.article) === entity.sitelinks?.enwiki?.title)
 		if (page) {
 			page.wikidata = entity
 		}
